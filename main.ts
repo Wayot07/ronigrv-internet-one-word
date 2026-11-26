@@ -9,7 +9,7 @@
 //   whole rather than one app or mood, surprising (not the first word anyone
 //   reaches for), and short enough to land in one beat.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const WORD = "unserious";
@@ -34,14 +34,22 @@ if (/\s/.test(WORD)) {
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, WORD, "utf8");
 
-// Post-write verification: read back and require byte-identical content
-// (no trailing newline — the file is exactly the word).
-const written = readFileSync(OUT, "utf8");
-if (written !== WORD) {
-  fail("read-back mismatch: entry.txt is not byte-identical to the word");
+// Post-write verification: read the raw bytes back and require them to be
+// byte-identical to the word (no trailing newline — the file is exactly the
+// word), and confirm the on-disk size matches too, so a truncated or
+// newline-appended write cannot slip through.
+const writtenBytes = readFileSync(OUT);
+const expectedBytes = Buffer.from(WORD, "utf8");
+if (!writtenBytes.equals(expectedBytes)) {
+  fail("read-back mismatch: entry.txt bytes are not identical to the word");
 }
+if (statSync(OUT).size !== expectedBytes.length) {
+  fail(`unexpected file size: ${statSync(OUT).size} bytes, expected ${expectedBytes.length}`);
+}
+const written = writtenBytes.toString("utf8");
 if (Buffer.byteLength(written, "utf8") !== WORD.length) {
   fail("unexpected byte length");
 }
 
 console.log(`wrote ${JSON.stringify(written)} (${written.length} chars) to ${OUT}`);
+process.exit(0);
